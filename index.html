@@ -106,6 +106,12 @@ select,input[type=text]{font:inherit;font-size:15px;color:var(--ink);background:
 /* steps */
 .form{display:flex;flex-direction:column;gap:16px;min-width:0}
 .step{background:var(--panel);border-radius:var(--r);padding-block:22px;padding-inline:24px;display:flex;flex-direction:column;gap:14px;min-width:0}
+/* native language is required: pressing the result button without it brings you here and nudges the card */
+.need{margin:0;color:var(--accent);font-weight:700;font-size:15.5px}
+.need[hidden]{display:none}
+.step.need-pick{box-shadow:0 0 0 3px var(--accent);animation:nudge .55s ease-in-out 2}
+@keyframes nudge{0%,100%{transform:translateX(0)}15%{transform:translateX(-9px)}30%{transform:translateX(8px)}45%{transform:translateX(-6px)}60%{transform:translateX(4px)}75%{transform:translateX(-2px)}}
+@media (prefers-reduced-motion: reduce){.step.need-pick{animation:none}}
 .step-h{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 .step-n{font-family:var(--display);font-size:20px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
 .step-h h2{margin:0;font-family:var(--display);font-size:21px;font-weight:700;line-height:1.25}
@@ -477,8 +483,9 @@ footer{margin-block-start:22px;color:var(--muted);font-size:14px;display:flex;ga
         <div class="purposes" id="purposes"></div>
       </section>
 
-      <section class="step" aria-labelledby="h-native">
+      <section class="step" id="stepNative" aria-labelledby="h-native">
         <div class="step-h"><span class="step-n">2</span><h2 id="h-native" data-t="qNative"></h2></div>
+        <p class="need" id="needNative" role="alert" data-t="needNative" hidden></p>
         <div class="chips" id="nativeChips"></div>
         <div class="search">
           <input type="text" id="nativeSearch" list="nativeList" autocomplete="off">
@@ -613,6 +620,7 @@ const STR = {
     distSrc: "Sources: Cambridge English, “Guided learning hours”; Spain's Ministry of Education, Orden EFP/962/2018; U.S. Foreign Service Institute; Ethnologue, lexical similarity",
     searchPh: "Other language…",
     notListed: "Not in the list",
+    needNative: "Choose your native language first — it changes the estimate.",
     picked: "Selected:",
     qLevel: "Your level now",
     quick: "Quick",
@@ -806,6 +814,7 @@ const STR = {
     distSrc: "Джерела: Cambridge English, «Guided learning hours»; Міністерство освіти Іспанії, Orden EFP/962/2018; U.S. Foreign Service Institute; Ethnologue, лексична подібність",
     searchPh: "Інша мова…",
     notListed: "Немає в списку",
+    needNative: "Спершу оберіть рідну мову — від неї залежить розрахунок.",
     picked: "Вибрано:",
     qLevel: "Ваш рівень зараз",
     wholeLevels: "Цілі рівні",
@@ -983,6 +992,7 @@ const STR = {
     distSrc: "Fuentes: Cambridge English, “Guided learning hours”; Ministerio de Educación de España, Orden EFP/962/2018; U.S. Foreign Service Institute; Ethnologue, similitud léxica",
     searchPh: "Otro idioma…",
     notListed: "No está en la lista",
+    needNative: "Primero elige tu lengua materna: cambia el cálculo.",
     picked: "Elegido:",
     qLevel: "Tu nivel actual",
     wholeLevels: "Niveles enteros",
@@ -1160,6 +1170,7 @@ const STR = {
     distSrc: "来源：Cambridge English “Guided learning hours”；西班牙教育部 Orden EFP/962/2018；U.S. Foreign Service Institute；Ethnologue 词汇相似度",
     searchPh: "其他语言…",
     notListed: "不在列表中",
+    needNative: "请先选择你的母语，它会影响估算结果。",
     picked: "已选：",
     qLevel: "你现在的水平",
     wholeLevels: "整级",
@@ -1337,6 +1348,7 @@ const STR = {
     distSrc: "출처: Cambridge English “Guided learning hours”; 스페인 교육부 Orden EFP/962/2018; U.S. Foreign Service Institute; Ethnologue 어휘 유사도",
     searchPh: "다른 언어…",
     notListed: "목록에 없음",
+    needNative: "먼저 모국어를 선택해 주세요. 결과가 달라집니다.",
     picked: "선택됨:",
     qLevel: "현재 레벨",
     wholeLevels: "전체 레벨",
@@ -1514,6 +1526,7 @@ const STR = {
     distSrc: "منابع: Cambridge English «Guided learning hours»؛ وزارت آموزش اسپانیا، Orden EFP/962/2018؛ U.S. Foreign Service Institute؛ Ethnologue، شباهت واژگانی",
     searchPh: "زبان دیگر…",
     notListed: "در فهرست نیست",
+    needNative: "اول زبان مادری‌تان را انتخاب کنید؛ نتیجه به آن بستگی دارد.",
     picked: "انتخاب‌شده:",
     qLevel: "سطح فعلی شما",
     wholeLevels: "سطح‌های کامل",
@@ -2657,6 +2670,7 @@ function decodeState(h){
    so "This plan was shared with you" shows only for someone else's link, not when you reopen your own. */
 let loadedHash = null;
 function update(){
+  if (state.native){ $("needNative").hidden = true; $("stepNative").classList.remove("need-pick"); }
   renderForm();
   renderResult();
   if (state.shown){
@@ -2709,6 +2723,17 @@ try {
   state.lang = STR[saved] ? saved : (fromBrowser || "en");
 } catch (err) {}
 $("goBtn").addEventListener("click", () => {
+  const smoothNow = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!state.native){
+    // the native language changes the estimate, so we ask for it first: go up to step 2 and nudge it
+    const box = $("stepNative"), msg = $("needNative");
+    msg.hidden = false;
+    box.classList.remove("need-pick"); void box.offsetWidth; box.classList.add("need-pick");
+    const y = box.getBoundingClientRect().top + window.scrollY - 16;
+    window.scrollTo({ top: Math.max(0, y), behavior: smoothNow ? "smooth" : "auto" });
+    const first = box.querySelector(".chip"); if (first) first.focus({ preventScroll: true });
+    return;
+  }
   state.shown = true; update();
   // show the top of the result: on phones it sits under the form; on wide screens it starts at the top of the grid
   const narrow = window.matchMedia("(max-width:920px)").matches;
